@@ -2,11 +2,11 @@ import { ago, label, tokens, until } from './shared'
 import type { ViewInput } from './shared'
 
 // The Gray view: our own band, changed freely. Two lines of plain gray text, no colors, emoji
-// or bars. Within one item the parts are joined by a space ("W 95% r 1d 4h");
+// or bars. Within one item the parts are joined by a space ("W 95% 1d 4h");
 // separate items are joined by " · ". No agent rows: the app lists running agents itself.
 
 const SEP = ' · '
-// Short names for the plan limits on line 2 ("5h 27% r 2h 17m · W 95% r 1d 4h").
+// Short names for the plan limits on line 2 ("5h 27% 2h 17m · W 95% 1d 4h").
 const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'W' }
 
 export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
@@ -35,7 +35,7 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
   // the bottom right shows it. No last turn either.
   const second: string[] = []
   for (const l of snap.limits) {
-    second.push(`${SHORT[l.kind] ?? label(l.kind)} ${l.percent}%${l.resetsAt ? ` r ${until(l.resetsAt, snap.at)}` : ''}`)
+    second.push(`${SHORT[l.kind] ?? label(l.kind)} ${l.percent}%${l.resetsAt ? ` ${until(l.resetsAt, snap.at)}` : ''}`)
   }
   if (c !== null && c.since === snap.startedAt) {
     const sizes = c.before === null || c.after === null ? '' : ` (last ${tokens(c.before)}→${tokens(c.after)})`

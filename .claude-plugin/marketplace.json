@@ -20,7 +20,7 @@
       "name": "plezuz-statusline",
       "source": "./plugins/desktop-statusline",
       "description": "Fork of centminmod's desktop-statusline: a compact one-line status band in the Claude Desktop Code tab — cost, tokens, prompt-cache time left and hit rate by default; every other element switchable. Requires Claude Code v2.1.287+.",
-      "version": "0.3.7",
+      "version": "0.3.8",
       "homepage": "https://github.com/plezuz/claude-plugins/tree/master/plugins/desktop-statusline",
       "author": {
         "name": "George Liu"

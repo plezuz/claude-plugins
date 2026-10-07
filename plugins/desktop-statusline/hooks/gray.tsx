@@ -11,7 +11,7 @@ const SEP = ' · '
 export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
   const { Box, Text } = ui
 
-  // Line 1: where, the session, what it spent, and the cache.
+  // Line 1: where, the session and what it spent; the cache time left sits on the right, by ☰.
   const first: string[] = []
   first.push(
     `${snap.dir}` +
@@ -24,12 +24,13 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
   if (snap.costUsd !== null) first.push(`$${snap.costUsd.toFixed(2)}`)
   if (s !== null && s.since === snap.startedAt) first.push(`${tokens(s.tokens)} tokens`)
   const hasTurn = turn !== null && turn.at >= snap.startedAt
+  let cache = ''
   if (hasTurn) {
     const leftMs = cacheTtlMs - Math.max(0, snap.at - turn.at)
     if (turn.cacheHit !== null) first.push(`hit ${turn.cacheHit}%`)
-    if (e.props.isWorking) first.push('cache live')
-    else if (leftMs <= 0) first.push('cache cold')
-    else first.push(`cache ${leftMs < 60_000 ? '<1m' : `${Math.floor(leftMs / 60_000)}m`} left`)
+    if (e.props.isWorking) cache = 'cache live'
+    else if (leftMs <= 0) cache = 'cache cold'
+    else cache = `cache ${leftMs < 60_000 ? '<1m' : `${Math.floor(leftMs / 60_000)}m`} left`
   }
 
   // Line 2: the plan limits as percents, then the last turn and compactions. No context: the
@@ -53,7 +54,8 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
     <Box flexDirection="column">
       <Box flexDirection="row" justifyContent="space-between" width="100%">
         <Text dimColor>{first.join(SEP)}</Text>
-        <Box marginLeft={1} flexShrink={0}>
+        <Box flexDirection="row" marginLeft={1} columnGap={1} flexShrink={0}>
+          {cache !== '' && <Text dimColor>{cache}</Text>}
           {menu}
         </Box>
       </Box>

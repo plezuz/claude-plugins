@@ -1,12 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelUsage, Register } from 'claude-code'
 
-import type { Snapshot, TurnStat, View } from '../types'
+import type { RequestStat, Snapshot, TurnStat, View } from '../types'
 import { grayView } from './gray'
 import { originalView } from './original'
 
 const snapshot = atom({ plugin: 'plezuz-statusline', key: 'snap' } as const, null)
 const lastTurn = atom({ plugin: 'plezuz-statusline', key: 'lastTurn' } as const, null)
+const lastRequest = atom({ plugin: 'plezuz-statusline', key: 'lastRequest' } as const, null)
 const compactions = atom({ plugin: 'plezuz-statusline', key: 'compactions' } as const, null)
 const spent = atom({ plugin: 'plezuz-statusline', key: 'spent' } as const, null)
 const view = atom({ plugin: 'plezuz-statusline', key: 'view' } as const, 'gray')
@@ -92,22 +93,30 @@ async function loadView($: EngineInterface) {
   if (saved === 'original' || saved === 'gray') await update($, view, () => saved)
 }
 
-// The last main turn is also saved per session, so the cache time survives a restart of the app.
+// The last main turn and the last main model request are also saved per session, so the cache
+// time survives a restart of the app.
 const TURN_KEY = 'turn:'
-const KEEP_TURNS_MS = 2 * 24 * 3_600_000
+const REQUEST_KEY = 'request:'
+const KEEP_SAVED_MS = 2 * 24 * 3_600_000
 
-async function loadTurn($: EngineInterface) {
-  if ((await read($, lastTurn)) !== null) return
-  const saved = await $.store.get(TURN_KEY + (await $.session.id()))
-  if (saved) await update($, lastTurn, () => saved as TurnStat)
+async function loadSaved($: EngineInterface) {
+  const id = await $.session.id()
+  if ((await read($, lastTurn)) === null) {
+    const saved = await $.store.get(TURN_KEY + id)
+    if (saved) await update($, lastTurn, () => saved as TurnStat)
+  }
+  if ((await read($, lastRequest)) === null) {
+    const saved = await $.store.get(REQUEST_KEY + id)
+    if (saved) await update($, lastRequest, () => saved as RequestStat)
+  }
 }
 
-async function saveTurn($: EngineInterface, stat: TurnStat) {
-  await $.store.set(TURN_KEY + (await $.session.id()), stat)
+async function save($: EngineInterface, prefix: string, stat: { at: number }) {
+  await $.store.set(prefix + (await $.session.id()), stat)
   for (const key of await $.store.keys()) {
-    if (!key.startsWith(TURN_KEY)) continue
-    const old = (await $.store.get(key)) as TurnStat | undefined
-    if (!old || stat.at - old.at > KEEP_TURNS_MS) await $.store.delete(key)
+    if (!key.startsWith(prefix)) continue
+    const old = (await $.store.get(key)) as { at: number } | undefined
+    if (!old || stat.at - old.at > KEEP_SAVED_MS) await $.store.delete(key)
   }
 }
 
@@ -125,7 +134,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await loadView($)
-    await loadTurn($)
+    await loadSaved($)
     await refresh($)
     $.clock.every(REFRESH_MS, () => void refresh($))
 
@@ -135,7 +144,7 @@ export const register: Register = (on, options) => {
   on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
     const attached = await next(e)
     await loadView($)
-    await loadTurn($)
+    await loadSaved($)
     await refresh($)
 
     return attached
@@ -164,11 +173,25 @@ export const register: Register = (on, options) => {
         cacheHit: e.usage ? cacheHit(e.usage) : null,
       }
       await update($, lastTurn, () => stat)
-      await saveTurn($, stat)
+      await save($, TURN_KEY, stat)
     }
     await refresh($)
 
     return completed
+  })
+
+  // Every model request of the main conversation reads and refreshes its prompt cache, so the
+  // cache time counts from the last one, mid-turn too (subagents have caches of their own).
+  on('turn.step', async function* ($, e, next) {
+    const at = await $.clock.now()
+    const result = yield* next(e)
+    if (!e.agentId && result.usage) {
+      const stat: RequestStat = { at, cacheHit: cacheHit(result.usage) }
+      await update($, lastRequest, () => stat)
+      await save($, REQUEST_KEY, stat)
+    }
+
+    return result
   })
 
   // A spawned agent shows as running only once it has started; look again shortly after.
@@ -216,6 +239,7 @@ export const register: Register = (on, options) => {
       e,
       snap,
       turn: await read($, lastTurn),
+      request: await read($, lastRequest),
       compactions: await read($, compactions),
       spent: await read($, spent),
       cacheTtlMs,

@@ -4,6 +4,14 @@ import type { On } from 'claude-code'
 
 const T0 = 1_800_000_000_000
 
+const USAGE = {
+  model: 'claude-opus-5-5',
+  input_tokens: 1_000,
+  output_tokens: 500,
+  cache_read_input_tokens: 99_000,
+  cache_creation_input_tokens: 0,
+}
+
 const engine = (on: On, saved: Record<string, unknown>) => {
   const clock = mock.clock(on)
   mock.store(on, saved)
@@ -23,6 +31,9 @@ const engine = (on: On, saved: Record<string, unknown>) => {
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } }) as never)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.complete', (_, e) => ({ text: e.answer, usage: e.usage }))
+  on('turn.step', async function* (_, e) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'tool_use' as const, usage: USAGE }
+  })
   on('ui.render', () => null as never)
   return clock
 }
@@ -49,12 +60,19 @@ const start = async ($: Engine, on: On, saved: Record<string, unknown> = {}) => 
   return clock
 }
 
-const band = ($: Engine) =>
+// One model request of the main conversation, read to its end.
+const step = async ($: Engine, index: number) => {
+  const stream = $.turn.step({ turnId: 't2', index, model: 'claude-opus-5-5', messageCount: 3 + index })
+  for await (const _ of stream);
+  return stream.result
+}
+
+const band = ($: Engine, isWorking = false) =>
   $.ui.mount({
     plugin: 'plezuz-statusline',
     surface: 'desktop',
     component: 'AbovePrompt',
-    props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: undefined as never, view: undefined as never },
+    props: { hasSurvey: false, isWorking, maxRows: 10, bodyColumns: 120, scroll: undefined as never, view: undefined as never },
   })
 
 test('Gray is the default: one dotted line, percent only, no bars', async ($, on) => {
@@ -98,4 +116,24 @@ test('the cache time is remembered after a restart of the app', async ($, on) =>
   await $.session.start({ cwd: '/work/proj', surface: 'desktop', isInteractive: true })
   const ui = await band($)
   expect(await ui.find({ text: 'cache 48m left' })).toBeDefined()
+})
+
+test('mid-turn, an hour after the last model request Gray shows red', async ($, on) => {
+  const clock = await start($, on)
+  await step($, 0)
+  await clock.advance(61 * 60_000)
+  const ui = await band($, true)
+  expect(await ui.find({ text: '🟥 cache expired' })).toBeDefined()
+  expect(await ui.find({ text: /cache live|cache .*left/ })).toBeUndefined()
+})
+
+test('while the first turn still runs Gray shows the cache time left', async ($, on) => {
+  const clock = engine(on, {})
+  await clock.set(T0)
+  await $.session.start({ cwd: '/work/proj', surface: 'desktop', isInteractive: true })
+  await step($, 0)
+  await clock.advance(10 * 60_000)
+  const ui = await band($, true)
+  expect(await ui.find({ text: 'cache 50m left' })).toBeDefined()
+  expect(await ui.find({ text: /hit 99%/ })).toBeDefined()
 })

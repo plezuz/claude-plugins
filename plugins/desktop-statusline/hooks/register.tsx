@@ -203,8 +203,9 @@ export const register: Register = (on, options) => {
     const current = await read($, view)
     const isOpen = await read($, menuOpen)
     const menu = (
-      <Button key="menu" plain dimColor onPress={() => update($, menuOpen, o => !o)}>
-        {'☰'}
+      // Gray at rest; "≡" is a plain text glyph (☰ can come out as a black emoji on Windows).
+      <Button key="menu" plain dimColor variant="secondary" onPress={() => update($, menuOpen, o => !o)}>
+        {'≡'}
       </Button>
     )
     const input = {
@@ -225,7 +226,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="row" columnGap={2}>
             <Text dimColor>{'View:'}</Text>
             {VIEWS.map(v => (
-              <Button key={`view-${v.name}`} plain onPress={() => chooseView($, v.name)}>
+              <Button key={`view-${v.name}`} plain dimColor variant="secondary" onPress={() => chooseView($, v.name)}>
                 {`${v.name === current ? '●' : '○'} ${v.title}`}
               </Button>
             ))}

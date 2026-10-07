@@ -35,10 +35,10 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
     const sizes = c.before === null || c.after === null ? '' : ` (last ${tokens(c.before)}→${tokens(c.after)})`
     left.push(`compacted ${c.count}×${sizes}`)
   }
+  // The least interesting last: a narrow window cuts it first.
+  left.push(`session ${ago(snap.at - snap.startedAt)}`)
 
-  // Right, never cut: the session time, then the cache time left by ☰ at the far right.
-  const right = [`session ${ago(snap.at - snap.startedAt)}`]
-  if (cache !== '') right.push(cache)
+  // Far right, never cut: the cache time left, by ☰.
 
   return (
     <Box flexDirection="row" justifyContent="space-between" width="100%">
@@ -46,7 +46,7 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
         <Text dimColor wrap="truncate-end">{left.join(SEP)}</Text>
       </Box>
       <Box flexDirection="row" marginLeft={1} columnGap={1} flexShrink={0}>
-        <Text dimColor>{right.join(SEP)}</Text>
+        {cache !== '' && <Text dimColor>{cache}</Text>}
         {menu}
       </Box>
     </Box>

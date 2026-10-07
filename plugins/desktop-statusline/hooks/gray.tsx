@@ -1,11 +1,13 @@
-import { ago, elapsed, label, tokens, until } from './shared'
+import { ago, label, tokens, until } from './shared'
 import type { ViewInput } from './shared'
 
 // The Gray view: our own band, changed freely. Two lines of plain gray text, no colors, emoji
-// or bars. Within one item the parts are joined by a space ("5-hour 24% resets in 2h 50m");
+// or bars. Within one item the parts are joined by a space ("W 95% r 1d 4h");
 // separate items are joined by " · ". No agent rows: the app lists running agents itself.
 
 const SEP = ' · '
+// Short names for the plan limits on line 2 ("5h 27% r 2h 17m · W 95% r 1d 4h").
+const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'W' }
 
 export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
   const { Box, Text } = ui
@@ -29,14 +31,11 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
     else cache = `cache ${leftMs < 60_000 ? '<1m' : `${Math.floor(leftMs / 60_000)}m`} left`
   }
 
-  // Line 2: the plan limits as percents, then the last turn and compactions. No context: the
-  // app's own circle at the bottom right shows it.
+  // Line 2: the plan limits as percents, then compactions. No context: the app's own circle at
+  // the bottom right shows it. No last turn either.
   const second: string[] = []
   for (const l of snap.limits) {
-    second.push(`${label(l.kind)} ${l.percent}%${l.resetsAt ? ` resets in ${until(l.resetsAt, snap.at)}` : ''}`)
-  }
-  if (hasTurn) {
-    second.push(`last turn ${elapsed(turn.durationMs)}${turn.model ? ` on ${turn.model.replace(/^claude-/, '')}` : ''}`)
+    second.push(`${SHORT[l.kind] ?? label(l.kind)} ${l.percent}%${l.resetsAt ? ` r ${until(l.resetsAt, snap.at)}` : ''}`)
   }
   if (c !== null && c.since === snap.startedAt) {
     const sizes = c.before === null || c.after === null ? '' : ` (last ${tokens(c.before)}→${tokens(c.after)})`

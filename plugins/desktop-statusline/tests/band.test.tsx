@@ -58,8 +58,8 @@ const band = ($: Engine) =>
 test('Gray is the default: one dotted line, percent only, no bars', async ($, on) => {
   await start($, on)
   const ui = await band($)
-  expect(await ui.find({ text: /^5h 42% 2h 49m · 3 prompts · \$0\.40 · 1M tokens · hit 94%$/ })).toBeDefined()
-  expect(await ui.find({ text: 'session 11m · cache 49m left' })).toBeDefined()
+  expect(await ui.find({ text: /^5h 42% 2h 49m · 3 prompts · \$0\.40 · 1M tokens · hit 94% · session 11m$/ })).toBeDefined()
+  expect(await ui.find({ text: 'cache 49m left' })).toBeDefined()
   expect(await ui.find({ text: /proj|last turn/ })).toBeUndefined()
   expect(await ui.find({ type: 'Svg' })).toBeUndefined()
 })

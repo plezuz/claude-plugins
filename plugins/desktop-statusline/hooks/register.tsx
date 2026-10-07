@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelUsage, Register } from 'claude-code'
 
-import type { Snapshot, View } from '../types'
+import type { Snapshot, TurnStat, View } from '../types'
 import { grayView } from './gray'
 import { originalView } from './original'
 
@@ -92,6 +92,25 @@ async function loadView($: EngineInterface) {
   if (saved === 'original' || saved === 'gray') await update($, view, () => saved)
 }
 
+// The last main turn is also saved per session, so the cache time survives a restart of the app.
+const TURN_KEY = 'turn:'
+const KEEP_TURNS_MS = 2 * 24 * 3_600_000
+
+async function loadTurn($: EngineInterface) {
+  if ((await read($, lastTurn)) !== null) return
+  const saved = await $.store.get(TURN_KEY + (await $.session.id()))
+  if (saved) await update($, lastTurn, () => saved as TurnStat)
+}
+
+async function saveTurn($: EngineInterface, stat: TurnStat) {
+  await $.store.set(TURN_KEY + (await $.session.id()), stat)
+  for (const key of await $.store.keys()) {
+    if (!key.startsWith(TURN_KEY)) continue
+    const old = (await $.store.get(key)) as TurnStat | undefined
+    if (!old || stat.at - old.at > KEEP_TURNS_MS) await $.store.delete(key)
+  }
+}
+
 async function chooseView($: EngineInterface, name: View) {
   await update($, view, () => name)
   await update($, menuOpen, () => false)
@@ -106,6 +125,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await loadView($)
+    await loadTurn($)
     await refresh($)
     $.clock.every(REFRESH_MS, () => void refresh($))
 
@@ -115,6 +135,7 @@ export const register: Register = (on, options) => {
   on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
     const attached = await next(e)
     await loadView($)
+    await loadTurn($)
     await refresh($)
 
     return attached
@@ -136,13 +157,14 @@ export const register: Register = (on, options) => {
       await update($, spent, s => ({ since: startedAt, tokens: (s?.since === startedAt ? s.tokens : 0) + turnTokens }))
     }
     if (!e.agentId) {
-      const at = await $.clock.now()
-      await update($, lastTurn, () => ({
-        at,
+      const stat: TurnStat = {
+        at: await $.clock.now(),
         durationMs: e.durationMs,
         model: e.usage?.model ?? null,
         cacheHit: e.usage ? cacheHit(e.usage) : null,
-      }))
+      }
+      await update($, lastTurn, () => stat)
+      await saveTurn($, stat)
     }
     await refresh($)
 

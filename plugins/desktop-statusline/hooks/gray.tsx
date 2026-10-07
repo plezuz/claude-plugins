@@ -32,14 +32,9 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
     else first.push(`cache ${leftMs < 60_000 ? '<1m' : `${Math.floor(leftMs / 60_000)}m`} left`)
   }
 
-  // Line 2: the meters as percents, then the last turn and compactions.
+  // Line 2: the plan limits as percents, then the last turn and compactions. No context: the
+  // app's own circle at the bottom right shows it.
   const second: string[] = []
-  second.push(
-    snap.contextPercent === null
-      ? 'Context waiting for first response'
-      : `Context ${snap.contextPercent}%` +
-          (snap.contextTokens === null ? '' : ` ${tokens(snap.contextTokens)}/${tokens(snap.contextWindow)}`),
-  )
   for (const l of snap.limits) {
     second.push(`${label(l.kind)} ${l.percent}%${l.resetsAt ? ` resets in ${until(l.resetsAt, snap.at)}` : ''}`)
   }
@@ -62,7 +57,7 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
           {menu}
         </Box>
       </Box>
-      <Text dimColor>{second.join(SEP)}</Text>
+      {second.length > 0 && <Text dimColor>{second.join(SEP)}</Text>}
       {agentRows.map(a => (
         <Text dimColor wrap="truncate-end">{`▸ ${a.description || a.type} (${a.type.split(':').pop()})`}</Text>
       ))}

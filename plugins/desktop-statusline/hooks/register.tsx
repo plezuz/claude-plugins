@@ -1,13 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelUsage, Register } from 'claude-code'
 
-import type { Limit, Snapshot, View } from '../types'
+import type { Snapshot, View } from '../types'
 import { grayView } from './gray'
 import { originalView } from './original'
-import { label, until } from './shared'
 
 const snapshot = atom({ plugin: 'plezuz-statusline', key: 'snap' } as const, null)
-const warned = atom({ plugin: 'plezuz-statusline', key: 'warned' } as const, [])
 const lastTurn = atom({ plugin: 'plezuz-statusline', key: 'lastTurn' } as const, null)
 const compactions = atom({ plugin: 'plezuz-statusline', key: 'compactions' } as const, null)
 const spent = atom({ plugin: 'plezuz-statusline', key: 'spent' } as const, null)
@@ -15,7 +13,6 @@ const view = atom({ plugin: 'plezuz-statusline', key: 'view' } as const, 'gray')
 const menuOpen = atom({ plugin: 'plezuz-statusline', key: 'menuOpen' } as const, false)
 
 const REFRESH_MS = 60_000
-const WARN_AT = [95, 80]
 const VIEWS: { name: View; title: string }[] = [
   { name: 'original', title: 'Original' },
   { name: 'gray', title: 'Gray' },
@@ -39,23 +36,6 @@ const git = async ($: EngineInterface, cwd: string, args: string[]) => {
   } catch {
     return null
   }
-}
-
-const warn = async ($: EngineInterface, limits: Limit[], now: number) => {
-  const seen = await read($, warned)
-  const fresh: string[] = []
-
-  for (const limit of limits) {
-    const threshold = WARN_AT.find(t => limit.percent >= t)
-    const key = `${limit.kind}@${threshold}@${limit.resetsAt}`
-    if (threshold === undefined || seen.includes(key)) continue
-
-    fresh.push(key)
-    const resets = limit.resetsAt ? ` · resets in ${until(limit.resetsAt, now)}` : ''
-    $.ui.toast(`${label(limit.kind)} usage limit at ${limit.percent}%${resets}`, { timeoutMs: 8000 })
-  }
-
-  if (fresh.length > 0) await update($, warned, s => [...s, ...fresh].slice(-50))
 }
 
 const refresh = async ($: EngineInterface) => {
@@ -104,7 +84,6 @@ const refresh = async ($: EngineInterface) => {
   }
 
   await update($, snapshot, () => snap)
-  await warn($, limits, now)
 }
 
 // The view picked in the ☰ menu is kept across sessions.

@@ -3,11 +3,11 @@ import type { EngineInterface, ModelUsage, Register } from 'claude-code'
 
 import type { Limit, Snapshot } from '../types'
 
-const snapshot = atom({ plugin: 'desktop-statusline', key: 'snap' } as const, null)
-const warned = atom({ plugin: 'desktop-statusline', key: 'warned' } as const, [])
-const lastTurn = atom({ plugin: 'desktop-statusline', key: 'lastTurn' } as const, null)
-const compactions = atom({ plugin: 'desktop-statusline', key: 'compactions' } as const, null)
-const spent = atom({ plugin: 'desktop-statusline', key: 'spent' } as const, null)
+const snapshot = atom({ plugin: 'plezuz-statusline', key: 'snap' } as const, null)
+const warned = atom({ plugin: 'plezuz-statusline', key: 'warned' } as const, [])
+const lastTurn = atom({ plugin: 'plezuz-statusline', key: 'lastTurn' } as const, null)
+const compactions = atom({ plugin: 'plezuz-statusline', key: 'compactions' } as const, null)
+const spent = atom({ plugin: 'plezuz-statusline', key: 'spent' } as const, null)
 
 const REFRESH_MS = 60_000
 const WARN_AT = [95, 80]
@@ -373,6 +373,9 @@ export const register: Register = (on, options) => {
       </Box>
     )
 
+    // Whatever the plugins beneath draw (such as the original desktop-statusline) stays, under ours.
+    const below = await next(e)
+
     return (
       <Box flexDirection="column">
         {where ? (
@@ -398,6 +401,7 @@ export const register: Register = (on, options) => {
           </Box>
         ))}
         {moreAgents > 0 && <Text dimColor>{`   +${moreAgents} more agent${moreAgents > 1 ? 's' : ''} running`}</Text>}
+        {below}
       </Box>
     )
   })

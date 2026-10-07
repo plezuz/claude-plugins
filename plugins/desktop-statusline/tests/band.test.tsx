@@ -18,8 +18,11 @@ const engine = (on: On) => {
   on('session.turns', () => ({ value: 3 }))
   on('session.cwd', () => ({ value: '/work/proj' }))
   on('agent.list', () => ({ value: [] }))
-  // The engine's own band: nothing beneath the plugin.
-  on('ui.render', () => null as never)
+  // Stands in for the original desktop-statusline band beneath this plugin.
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>{'original band'}</Text>
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.complete', (_, e) => ({ text: e.answer, usage: e.usage }))
   return clock
@@ -44,7 +47,7 @@ const turn = ($: Engine, agentId?: string) =>
 
 const band = ($: Engine, isWorking = false) =>
   $.ui.mount({
-    plugin: 'desktop-statusline',
+    plugin: 'plezuz-statusline',
     surface: 'desktop',
     component: 'AbovePrompt',
     props: { hasSurvey: false, isWorking, maxRows: 10, bodyColumns: 120, scroll: undefined as never, view: undefined as never },
@@ -64,6 +67,7 @@ test('compact line: cost, tokens, cache time left and hit rate', async ($, on) =
   expect((await ui.find({ text: 'cache 49m left' }))).toBeDefined()
   expect((await ui.find({ text: 'hit 94%' }))).toBeDefined()
   expect((await ui.find({ text: /📁|Context/ }))).toBeUndefined()
+  expect((await ui.find({ text: 'original band' }))).toBeDefined()
 })
 
 test('cache turns cold after the TTL', async ($, on) => {

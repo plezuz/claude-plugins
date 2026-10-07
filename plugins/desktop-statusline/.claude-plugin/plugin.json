@@ -1,5 +1,5 @@
 {
-  "name": "desktop-statusline",
+  "name": "plezuz-statusline",
   "version": "0.2.0",
   "description": "Compact status band above the prompt in the Claude Desktop app's Code tab. By default one line: session cost, tokens processed, prompt-cache time left (from the 1h or 5m TTL) and cache hit rate, plus plan usage limit meters and running agents. Folder, branch, session age, prompt count, context meter, last turn and compactions can each be switched on. Toasts at 80% and 95% of a usage limit. Fork of centminmod/desktop-statusline.",
   "author": {

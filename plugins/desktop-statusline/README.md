@@ -17,6 +17,32 @@ inside Claude Code and draws it in the desktop app instead.
 - Works on any plan. The usage limit meters appear when Claude Code reports
   plan limits for your account.
 
+## This fork (plezuz)
+
+Fork of [centminmod/desktop-statusline](https://github.com/centminmod/claude-plugins/tree/master/plugins/desktop-statusline).
+By default the band is one compact line plus the usage-limit meters:
+
+```
+$0.40 · 2M tokens · cache 49m left · hit 94%
+```
+
+- **cache Nm left**: minutes until the prompt cache expires (`cache_ttl`
+  minus the idle time since the last turn), then `cache cold`. Shown as a
+  warning in the last tenth of the TTL, and `cache live` while a turn runs.
+- **tokens**: every token processed this session (fresh input, cache writes,
+  cache reads and output, subagents included). Cache reads dominate, so this
+  grows much faster than cost.
+- Every element has a `show_*` switch in `/plugin` or `/config`. Off by
+  default: folder, branch, session age, prompt count, context meter and last
+  turn. Git runs only when folder or branch is on.
+
+Install from the fork:
+
+```
+/plugin marketplace add plezuz/claude-plugins
+/plugin install desktop-statusline@plezuz
+```
+
 ---
 
 ## What it shows

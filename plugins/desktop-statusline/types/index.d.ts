@@ -27,6 +27,8 @@ export type TurnStat = {
   cacheHit: number | null
 }
 
+export type Spent = { since: number; tokens: number }
+
 export type Compactions = { since: number; count: number; before: number | null; after: number | null }
 
 declare module 'claude-code' {
@@ -36,6 +38,7 @@ declare module 'claude-code' {
       warned: string[]
       lastTurn: TurnStat | null
       compactions: Compactions | null
+      spent: Spent | null
     }
   }
 }

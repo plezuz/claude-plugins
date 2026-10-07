@@ -1,13 +1,13 @@
 {
   "name": "desktop-statusline",
-  "version": "0.1.1",
-  "description": "Status band above the prompt in the Claude Desktop app's Code tab: folder, git branch and state, session age, prompt count and cost, a context meter, 5-hour and weekly plan usage limit meters with reset countdowns, last-turn model, duration and cache hit rate, idle time against the prompt-cache TTL, compactions, and running agents. Toasts at 80% and 95% of a usage limit. Draws only on the desktop surface, so a CLI statusLine is left alone.",
+  "version": "0.2.0",
+  "description": "Compact status band above the prompt in the Claude Desktop app's Code tab. By default one line: session cost, tokens processed, prompt-cache time left (from the 1h or 5m TTL) and cache hit rate, plus plan usage limit meters and running agents. Folder, branch, session age, prompt count, context meter, last turn and compactions can each be switched on. Toasts at 80% and 95% of a usage limit. Fork of centminmod/desktop-statusline.",
   "author": {
     "name": "George Liu",
     "url": "https://github.com/centminmod"
   },
-  "homepage": "https://github.com/centminmod/claude-plugins/tree/master/plugins/desktop-statusline",
-  "repository": "https://github.com/centminmod/claude-plugins",
+  "homepage": "https://github.com/plezuz/claude-plugins/tree/master/plugins/desktop-statusline",
+  "repository": "https://github.com/plezuz/claude-plugins",
   "license": "MIT",
   "icon": "./images/icon.png",
   "keywords": [
@@ -25,6 +25,84 @@
       "title": "Prompt-cache TTL",
       "description": "How long your main conversation's prompt cache lives: enter 1h or 5m (anything else counts as 1h). The band marks the cache cold after this much idle time. Claude Code's docs give 1h on a Claude subscription within plan usage, and 5m with an API key, a cloud provider, or usage credits. A promptCacheTtl setting overrides both.",
       "default": "1h"
+    },
+    "show_location": {
+      "type": "boolean",
+      "title": "Show folder",
+      "description": "Folder name and number of changed files.",
+      "default": false
+    },
+    "show_branch": {
+      "type": "boolean",
+      "title": "Show git branch",
+      "description": "Branch, worktree marker and commits ahead/behind.",
+      "default": false
+    },
+    "show_session_age": {
+      "type": "boolean",
+      "title": "Show session age",
+      "description": "How long ago the session started.",
+      "default": false
+    },
+    "show_prompt_count": {
+      "type": "boolean",
+      "title": "Show prompt count",
+      "description": "Prompts sent in this session.",
+      "default": false
+    },
+    "show_context": {
+      "type": "boolean",
+      "title": "Show context meter",
+      "description": "Context window meter (the app already shows one).",
+      "default": false
+    },
+    "show_limits": {
+      "type": "boolean",
+      "title": "Show usage limits",
+      "description": "5-hour and weekly plan limit meters.",
+      "default": true
+    },
+    "show_cost": {
+      "type": "boolean",
+      "title": "Show cost",
+      "description": "Session cost in US dollars.",
+      "default": true
+    },
+    "show_tokens": {
+      "type": "boolean",
+      "title": "Show tokens",
+      "description": "Tokens processed this session (input, cache reads and writes, output; subagents included), in k or M.",
+      "default": true
+    },
+    "show_cache_hit": {
+      "type": "boolean",
+      "title": "Show cache hit rate",
+      "description": "Share of the last turn's input read from cache.",
+      "default": true
+    },
+    "show_cache_remaining": {
+      "type": "boolean",
+      "title": "Show cache time left",
+      "description": "Minutes until the prompt cache expires, or 'cache cold'.",
+      "default": true
+    },
+    "show_last_turn": {
+      "type": "boolean",
+      "title": "Show last turn",
+      "description": "Last turn's duration and model.",
+      "default": false
+    },
+    "show_compactions": {
+      "type": "boolean",
+      "title": "Show compactions",
+      "description": "How often the session compacted.",
+      "default": true
+    },
+    "show_agents": {
+      "type": "boolean",
+      "title": "Show running agents",
+      "description": "A row per running subagent.",
+      "default": true
     }
   }
 }

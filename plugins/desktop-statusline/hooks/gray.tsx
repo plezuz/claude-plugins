@@ -3,9 +3,8 @@ import type { ViewInput } from './shared'
 
 // The Gray view: our own band, changed freely. Two lines of plain gray text, no colors, emoji
 // or bars. Within one item the parts are joined by a space ("5-hour 24% resets in 2h 50m");
-// separate items are joined by " · ".
+// separate items are joined by " · ". No agent rows: the app lists running agents itself.
 
-const AGENT_ROWS = 3
 const SEP = ' · '
 
 export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
@@ -44,9 +43,6 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
     second.push(`compacted ${c.count}×${sizes}`)
   }
 
-  const agentRows = snap.agents.slice(0, AGENT_ROWS)
-  const moreAgents = snap.agents.length - agentRows.length
-
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" justifyContent="space-between" width="100%">
@@ -57,10 +53,6 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
         </Box>
       </Box>
       {second.length > 0 && <Text dimColor>{second.join(SEP)}</Text>}
-      {agentRows.map(a => (
-        <Text dimColor wrap="truncate-end">{`▸ ${a.description || a.type} (${a.type.split(':').pop()})`}</Text>
-      ))}
-      {moreAgents > 0 && <Text dimColor>{`+${moreAgents} more agent${moreAgents > 1 ? 's' : ''} running`}</Text>}
     </Box>
   )
 }

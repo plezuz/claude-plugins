@@ -1,6 +1,6 @@
 import type { Elements, RenderElement, RenderInputOf } from 'claude-code'
 
-import type { Compactions, Snapshot, Spent, TurnStat } from '../types'
+import type { Compactions, RequestStat, Snapshot, Spent, TurnStat } from '../types'
 
 export type Band = RenderInputOf<'AbovePrompt', 'desktop'>
 
@@ -10,6 +10,7 @@ export type ViewInput = {
   e: Band
   snap: Snapshot
   turn: TurnStat | null
+  request: RequestStat | null
   compactions: Compactions | null
   spent: Spent | null
   cacheTtlMs: number

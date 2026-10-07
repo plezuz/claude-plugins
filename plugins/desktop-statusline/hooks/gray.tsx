@@ -10,7 +10,7 @@ const SEP = ' · '
 // Short names for the plan limits ("5h 27% 2h 17m · w 95% 1d 4h").
 const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'w' }
 
-export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
+export function grayView({ ui, snap, turn, request, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
   const { Box, Text } = ui
 
   // Left: the most interesting first, so a narrow window cuts the least interesting end.
@@ -22,14 +22,15 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
   left.push(`${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}`)
   if (snap.costUsd !== null) left.push(`$${snap.costUsd.toFixed(2)}`)
   if (s !== null && s.since === snap.startedAt) left.push(`${tokens(s.tokens)} tokens`)
-  const hasTurn = turn !== null && turn.at >= snap.startedAt
+  // The cache time counts from the last main model request, mid-turn too; a value saved before
+  // requests were tracked falls back to the last turn.
+  const last = request ?? turn
   let cache = ''
   let expired = false
-  if (hasTurn) {
-    const leftMs = cacheTtlMs - Math.max(0, snap.at - turn.at)
-    if (turn.cacheHit !== null) left.push(`hit ${turn.cacheHit}%`)
-    if (e.props.isWorking) cache = 'cache live'
-    else if (leftMs <= 0) expired = true
+  if (last !== null && last.at >= snap.startedAt) {
+    const leftMs = cacheTtlMs - Math.max(0, snap.at - last.at)
+    if (last.cacheHit !== null) left.push(`hit ${last.cacheHit}%`)
+    if (leftMs <= 0) expired = true
     else cache = `cache ${leftMs < 60_000 ? '<1m' : `${Math.floor(leftMs / 60_000)}m`} left`
   }
   if (c !== null && c.since === snap.startedAt) {

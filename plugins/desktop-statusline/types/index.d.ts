@@ -27,6 +27,12 @@ export type TurnStat = {
   cacheHit: number | null
 }
 
+// The last model request of the main conversation: the cache time counts from it.
+export type RequestStat = {
+  at: number
+  cacheHit: number | null
+}
+
 export type View = 'original' | 'gray'
 
 export type Spent = { since: number; tokens: number }
@@ -39,6 +45,7 @@ declare module 'claude-code' {
       snap: Snapshot | null
       warned: string[]
       lastTurn: TurnStat | null
+      lastRequest: RequestStat | null
       compactions: Compactions | null
       spent: Spent | null
       view: View

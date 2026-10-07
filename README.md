@@ -1,3 +1,41 @@
+# plezuz / claude-plugins: a subtle gray status band
+
+**A subtle gray, two-line status band** above the prompt in the Claude Desktop
+app's Code tab. It is a fork of
+[centminmod/claude-plugins](https://github.com/centminmod/claude-plugins). The
+fork is finished, and no further plugins are planned.
+
+```
+mm_support · session 11m · 3 prompts · $0.40 · 1M tokens · hit 94%        cache 49m left ≡
+5-hour 24% resets in 2h 50m · Weekly 94% resets in 1d 4h · last turn 1s on opus-5-5
+```
+
+How it differs from the original `desktop-statusline`:
+
+- **Gray only.** No colors, no bars and no emoji: every meter is a plain
+  percent.
+- **Two lines.** Parts of one item are separated by a space, and separate
+  items by ` · `.
+- **Cache time left** (`cache 49m left`, then `cache cold`) sits on the right,
+  and the session's **tokens** sit beside its cost.
+- **Less noise.** It shows the folder name only, with no branch, and no
+  context figure, because the app's own circle shows that.
+- **The ≡ menu** switches back to the original band at any time. The choice is
+  kept.
+- **Read-only.** It makes no model calls and no network calls, so looking at
+  the band never spends anything.
+
+```
+/plugin marketplace add plezuz/claude-plugins
+/plugin install plezuz-statusline@plezuz
+```
+
+Details: [plugins/desktop-statusline](plugins/desktop-statusline).
+
+---
+
+*The upstream README follows.*
+
 # centminmod / claude-plugins
 
 - Site: <https://ai.georgeliu.com/p/claude-plugins>

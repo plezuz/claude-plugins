@@ -7,6 +7,7 @@ const snapshot = atom({ plugin: 'desktop-statusline', key: 'snap' } as const, nu
 const warned = atom({ plugin: 'desktop-statusline', key: 'warned' } as const, [])
 const lastTurn = atom({ plugin: 'desktop-statusline', key: 'lastTurn' } as const, null)
 const compactions = atom({ plugin: 'desktop-statusline', key: 'compactions' } as const, null)
+const spent = atom({ plugin: 'desktop-statusline', key: 'spent' } as const, null)
 
 const REFRESH_MS = 60_000
 const WARN_AT = [95, 80]
@@ -70,6 +71,38 @@ const cacheHit = (u: ModelUsage) => {
   return input === 0 ? null : Math.round((u.cache_read_input_tokens / input) * 100)
 }
 
+// Every token a request processed: fresh input, cache writes, cache reads and output.
+const processed = (u: ModelUsage) =>
+  u.input_tokens + u.output_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+
+// The `show_*` options. Each defaults to the compact profile: cost, tokens, cache time left and
+// hit rate, limits and agents on; location, branch, session age, prompts, context and last turn off.
+const SHOW_DEFAULTS = {
+  show_location: false,
+  show_branch: false,
+  show_session_age: false,
+  show_prompt_count: false,
+  show_context: false,
+  show_limits: true,
+  show_cost: true,
+  show_tokens: true,
+  show_cache_hit: true,
+  show_cache_remaining: true,
+  show_last_turn: false,
+  show_compactions: true,
+  show_agents: true,
+}
+type Show = Record<keyof typeof SHOW_DEFAULTS, boolean>
+const readShow = (options: Readonly<Record<string, unknown>>): Show => {
+  const show = { ...SHOW_DEFAULTS }
+  for (const key of Object.keys(show) as (keyof Show)[]) {
+    const value = options[key]
+    if (typeof value === 'boolean') show[key] = value
+    else if (value === 'true' || value === 'false') show[key] = value === 'true'
+  }
+  return show
+}
+
 const isOnDesktop = async ($: EngineInterface) => (await $.session.surfaces()).includes('desktop')
 
 const git = async ($: EngineInterface, cwd: string, args: string[]) => {
@@ -98,7 +131,7 @@ const warn = async ($: EngineInterface, limits: Limit[], now: number) => {
   if (fresh.length > 0) await update($, warned, s => [...s, ...fresh].slice(-50))
 }
 
-const refresh = async ($: EngineInterface) => {
+const refresh = async ($: EngineInterface, needsGit: boolean) => {
   if (!(await isOnDesktop($))) return
 
   const [usage, cwd, now, agents, prompts] = await Promise.all([
@@ -108,10 +141,13 @@ const refresh = async ($: EngineInterface) => {
     $.agent.list(),
     $.session.turns(),
   ])
-  const [status, dirs] = await Promise.all([
-    git($, cwd, ['status', '--porcelain=v2', '--branch']),
-    git($, cwd, ['rev-parse', '--git-dir', '--git-common-dir']),
-  ])
+  // Git runs only when the location or branch is shown.
+  const [status, dirs] = needsGit
+    ? await Promise.all([
+        git($, cwd, ['status', '--porcelain=v2', '--branch']),
+        git($, cwd, ['rev-parse', '--git-dir', '--git-common-dir']),
+      ])
+    : [null, null]
 
   const lines = status?.split('\n') ?? []
   const head = lines.find(l => l.startsWith('# branch.head '))?.slice(14)
@@ -151,31 +187,39 @@ export const register: Register = (on, options) => {
   // The main conversation's prompt-cache TTL (the `cache_ttl` option): 1 hour on a Claude
   // subscription within plan usage, 5 minutes with an API key, a cloud provider or usage credits.
   const cacheTtlMs = options.cache_ttl === '5m' ? 5 * 60_000 : 60 * 60_000
+  const show = readShow(options)
+  const needsGit = show.show_location || show.show_branch
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    await refresh($)
-    $.clock.every(REFRESH_MS, () => void refresh($))
+    await refresh($, needsGit)
+    $.clock.every(REFRESH_MS, () => void refresh($, needsGit))
 
     return started
   })
 
   on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
     const attached = await next(e)
-    await refresh($)
+    await refresh($, needsGit)
 
     return attached
   })
 
   on('session.measure', async ($, e, next) => {
     const measured = await next(e)
-    await refresh($)
+    await refresh($, needsGit)
 
     return measured
   })
 
   on('turn.complete', async ($, e, next) => {
     const completed = await next(e)
+    // Tokens count every turn, subagents' included: they are spent all the same.
+    if (e.usage) {
+      const { startedAt } = await $.session.usage()
+      const turnTokens = processed(e.usage)
+      await update($, spent, s => ({ since: startedAt, tokens: (s?.since === startedAt ? s.tokens : 0) + turnTokens }))
+    }
     if (!e.agentId) {
       const at = await $.clock.now()
       await update($, lastTurn, () => ({
@@ -185,14 +229,14 @@ export const register: Register = (on, options) => {
         cacheHit: e.usage ? cacheHit(e.usage) : null,
       }))
     }
-    await refresh($)
+    await refresh($, needsGit)
 
     return completed
   })
 
   // A spawned agent shows as running only once it has started; look again shortly after.
   on('tool.call', { tool: 'Agent' }, ($, e, next) => {
-    $.clock.after(2000, () => void refresh($))
+    $.clock.after(2000, () => void refresh($, needsGit))
 
     return next(e)
   })
@@ -263,67 +307,86 @@ export const register: Register = (on, options) => {
     const contextRoomPx = Math.floor(availPx - fixedPx - used.length * CHAR_PX)
     const contextBar = Math.max(40, Math.min(isStacked ? limitBar : 2 * limitBar, contextRoomPx))
 
-    const where =
-      `📁 ${snap.dir}` +
-      (snap.branch === null ? '' : `   🌿 ${snap.branch}${snap.isWorktree ? ' 🌳' : ''}`) +
-      `${snap.ahead ? ` ↑${snap.ahead}` : ''}${snap.behind ? ` ↓${snap.behind}` : ''}` +
-      `${snap.changed ? `   ● ${snap.changed} changed` : ''}`
-    const session =
-      `session ${ago(snap.at - snap.startedAt)} · ${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}` +
-      (snap.costUsd === null ? '' : ` · $${snap.costUsd.toFixed(2)}`)
+    const where = [
+      show.show_location ? `📁 ${snap.dir}` : '',
+      show.show_branch && snap.branch !== null
+        ? `🌿 ${snap.branch}${snap.isWorktree ? ' 🌳' : ''}` +
+          `${snap.ahead ? ` ↑${snap.ahead}` : ''}${snap.behind ? ` ↓${snap.behind}` : ''}`
+        : '',
+      show.show_location && snap.changed ? `● ${snap.changed} changed` : '',
+    ]
+      .filter(Boolean)
+      .join('   ')
 
-    // Bottom line parts: dim unless they need attention (warning) or are live (agents).
-    const activity: { text: string; emphasis?: 'warning' | 'live' }[] = []
+    // The summary line's parts, in order: dim unless they need attention (warning).
+    const parts: { text: string; emphasis?: 'warning' }[] = []
+    if (show.show_session_age) parts.push({ text: `session ${ago(snap.at - snap.startedAt)}` })
+    if (show.show_prompt_count) parts.push({ text: `${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}` })
+    if (show.show_cost && snap.costUsd !== null) parts.push({ text: `$${snap.costUsd.toFixed(2)}` })
+    const s = await read($, spent)
+    if (show.show_tokens && s !== null && s.since === snap.startedAt) parts.push({ text: `${tokens(s.tokens)} tokens` })
+
     const turn = await read($, lastTurn)
     if (turn !== null && turn.at >= snap.startedAt) {
-      const idleMs = Math.max(0, snap.at - turn.at)
-      const isCold = idleMs >= cacheTtlMs
-      activity.push({ text: `Last turn ${elapsed(turn.durationMs)}${turn.model ? ` on ${turn.model}` : ''}` })
-      if (turn.cacheHit !== null) {
-        activity.push({ text: `cache ${turn.cacheHit}%`, emphasis: turn.cacheHit < 50 ? 'warning' : undefined })
+      // A running turn keeps the cache warm; otherwise it lives cache_ttl after the last turn.
+      const leftMs = cacheTtlMs - Math.max(0, snap.at - turn.at)
+      if (show.show_cache_remaining) {
+        if (e.props.isWorking) parts.push({ text: 'cache live' })
+        else if (leftMs <= 0) parts.push({ text: 'cache cold', emphasis: 'warning' })
+        else {
+          const minutes = Math.floor(leftMs / 60_000)
+          parts.push({
+            text: `cache ${minutes < 1 ? '<1m' : `${minutes}m`} left`,
+            emphasis: leftMs <= cacheTtlMs / 10 ? 'warning' : undefined,
+          })
+        }
       }
-      if (!e.props.isWorking) {
-        activity.push({ text: `idle ${ago(idleMs)}${isCold ? ' (cache cold)' : ''}`, emphasis: isCold ? 'warning' : undefined })
+      if (show.show_cache_hit && turn.cacheHit !== null) {
+        parts.push({ text: `hit ${turn.cacheHit}%`, emphasis: turn.cacheHit < 50 ? 'warning' : undefined })
+      }
+      if (show.show_last_turn) {
+        parts.push({ text: `last turn ${elapsed(turn.durationMs)}${turn.model ? ` on ${turn.model}` : ''}` })
       }
     }
     const c = await read($, compactions)
-    if (c !== null && c.since === snap.startedAt) {
+    if (show.show_compactions && c !== null && c.since === snap.startedAt) {
       const sizes = c.before === null || c.after === null ? '' : ` (last ${tokens(c.before)} → ${tokens(c.after)})`
-      activity.push({ text: `compacted ${c.count}×${sizes}` })
+      parts.push({ text: `compacted ${c.count}×${sizes}` })
     }
-    // Running agents get rows of their own (description truncated, type kept), so a
-    // long description never runs off the "Last turn" line.
-    const agentRows = snap.agents.slice(0, AGENT_ROWS)
-    const moreAgents = snap.agents.length - agentRows.length
+    // Running agents get rows of their own (description truncated, type kept).
+    const agentRows = show.show_agents ? snap.agents.slice(0, AGENT_ROWS) : []
+    const moreAgents = show.show_agents ? snap.agents.length - agentRows.length : 0
+    const showLimits = show.show_limits && snap.limits.length > 0
+
+    if (!where && parts.length === 0 && !show.show_context && !showLimits && agentRows.length === 0) return next(e)
+
+    const summary = (
+      <Box flexDirection="row" flexShrink={0}>
+        {parts.map((p, i) => (
+          <Box flexDirection="row">
+            {i > 0 && <Text dimColor>{' · '}</Text>}
+            <Text color={p.emphasis} dimColor={p.emphasis === undefined}>
+              {p.text}
+            </Text>
+          </Box>
+        ))}
+      </Box>
+    )
 
     return (
       <Box flexDirection="column">
-        <Box flexDirection="row" justifyContent="space-between" width="100%">
-          <Text wrap="truncate-end">{where}</Text>
-          <Box marginLeft={2} flexShrink={0}>
-            <Text dimColor>{session}</Text>
+        {where ? (
+          <Box flexDirection="row" justifyContent="space-between" width="100%">
+            <Text wrap="truncate-end">{where}</Text>
+            {parts.length > 0 && <Box marginLeft={2}>{summary}</Box>}
           </Box>
-        </Box>
-        {meter('Context', snap.contextPercent, used, contextBar)}
-        {snap.limits.length > 0 && (
+        ) : (
+          parts.length > 0 && summary
+        )}
+        {show.show_context && meter('Context', snap.contextPercent, used, contextBar)}
+        {showLimits && (
           <Box flexDirection={isStacked ? 'column' : 'row'} columnGap={METER_GAP}>
             {snap.limits.map((l, i) => meter(label(l.kind), l.percent, details[i] ?? '', limitBar))}
-          </Box>
-        )}
-        {activity.length > 0 && (
-          <Box flexDirection="row">
-            {activity.map((a, i) => (
-              <Box flexDirection="row">
-                {i > 0 && <Text dimColor>{' · '}</Text>}
-                <Text
-                  wrap="truncate-end"
-                  color={a.emphasis === 'warning' ? 'warning' : undefined}
-                  dimColor={a.emphasis === undefined}
-                >
-                  {a.text}
-                </Text>
-              </Box>
-            ))}
           </Box>
         )}
         {agentRows.map(a => (

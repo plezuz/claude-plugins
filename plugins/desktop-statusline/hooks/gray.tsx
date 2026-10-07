@@ -1,8 +1,8 @@
 import { ago, label, tokens, until } from './shared'
 import type { ViewInput } from './shared'
 
-// The Gray view: our own band, changed freely. One line of plain gray text, no colors, emoji
-// or bars. Within one item the parts are joined by a space ("w 95% 1d 4h"); separate items are
+// The Gray view: our own band, changed freely. One line of plain gray text, no bars; the one
+// color is a red "cache expired". Within one item the parts are joined by a space ("w 95% 1d 4h"); separate items are
 // joined by " · ". No folder (the app shows it), no agent rows, no last turn, no context (the
 // app's own circle shows it).
 
@@ -24,11 +24,12 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
   if (s !== null && s.since === snap.startedAt) left.push(`${tokens(s.tokens)} tokens`)
   const hasTurn = turn !== null && turn.at >= snap.startedAt
   let cache = ''
+  let expired = false
   if (hasTurn) {
     const leftMs = cacheTtlMs - Math.max(0, snap.at - turn.at)
     if (turn.cacheHit !== null) left.push(`hit ${turn.cacheHit}%`)
     if (e.props.isWorking) cache = 'cache live'
-    else if (leftMs <= 0) cache = 'cache cold'
+    else if (leftMs <= 0) expired = true
     else cache = `cache ${leftMs < 60_000 ? '<1m' : `${Math.floor(leftMs / 60_000)}m`} left`
   }
   if (c !== null && c.since === snap.startedAt) {
@@ -47,6 +48,7 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
       </Box>
       <Box flexDirection="row" marginLeft={1} columnGap={1} flexShrink={0}>
         {cache !== '' && <Text dimColor>{cache}</Text>}
+        {expired && <Text color="error">{'🟥 cache expired'}</Text>}
         {menu}
       </Box>
     </Box>

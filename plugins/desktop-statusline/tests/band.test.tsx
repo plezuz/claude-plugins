@@ -16,6 +16,7 @@ const engine = (on: On, saved: Record<string, unknown>) => {
     },
   }))
   on('session.surfaces', () => ({ value: ['desktop'] as const }))
+  on('session.id', () => ({ value: 's1' }))
   on('session.turns', () => ({ value: 3 }))
   on('session.cwd', () => ({ value: 'C:\\work\\proj' }))
   on('agent.list', () => ({ value: [] }))
@@ -45,6 +46,7 @@ const start = async ($: Engine, on: On, saved: Record<string, unknown> = {}) => 
     },
   })
   await clock.advance(11 * 60_000 + 30_000)
+  return clock
 }
 
 const band = ($: Engine) =>
@@ -80,4 +82,20 @@ test('a saved choice is used at the next session start', async ($, on) => {
   await start($, on, { view: 'original' })
   const ui = await band($)
   expect(await ui.find({ type: 'Svg' })).toBeDefined()
+})
+
+test('past the cache time Gray shows a red cache expired', async ($, on) => {
+  const clock = await start($, on)
+  await clock.advance(50 * 60_000)
+  const ui = await band($)
+  expect(await ui.find({ text: '🟥 cache expired' })).toBeDefined()
+  expect(await ui.find({ text: /cache .*left/ })).toBeUndefined()
+})
+
+test('the cache time is remembered after a restart of the app', async ($, on) => {
+  const clock = engine(on, { 'turn:s1': { at: T0, durationMs: 1, model: null, cacheHit: 90 } })
+  await clock.set(T0 + 11 * 60_000 + 30_000)
+  await $.session.start({ cwd: '/work/proj', surface: 'desktop', isInteractive: true })
+  const ui = await band($)
+  expect(await ui.find({ text: 'cache 48m left' })).toBeDefined()
 })

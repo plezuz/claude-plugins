@@ -13,11 +13,8 @@ export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtl
 
   // Line 1: where, the session and what it spent; the cache time left sits on the right, by ☰.
   const first: string[] = []
-  first.push(
-    `${snap.dir}` +
-      (snap.branch === null ? '' : ` ${snap.branch}${snap.isWorktree ? ' (worktree)' : ''}`) +
-      `${snap.ahead ? ` ↑${snap.ahead}` : ''}${snap.behind ? ` ↓${snap.behind}` : ''}`,
-  )
+  // The last folder alone, on Windows paths too; no branch.
+  first.push(snap.dir.split(/[\\/]/).filter(Boolean).pop() ?? snap.dir)
   if (snap.changed) first.push(`${snap.changed} changed`)
   first.push(`session ${ago(snap.at - snap.startedAt)}`)
   first.push(`${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}`)

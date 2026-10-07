@@ -2,13 +2,13 @@ import { ago, label, tokens, until } from './shared'
 import type { ViewInput } from './shared'
 
 // The Gray view: our own band, changed freely. One line of plain gray text, no colors, emoji
-// or bars. Within one item the parts are joined by a space ("W 95% 1d 4h"); separate items are
+// or bars. Within one item the parts are joined by a space ("w 95% 1d 4h"); separate items are
 // joined by " · ". No folder (the app shows it), no agent rows, no last turn, no context (the
 // app's own circle shows it).
 
 const SEP = ' · '
-// Short names for the plan limits ("5h 27% 2h 17m · W 95% 1d 4h").
-const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'W' }
+// Short names for the plan limits ("5h 27% 2h 17m · w 95% 1d 4h").
+const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'w' }
 
 export function grayView({ ui, e, snap, turn, compactions: c, spent: s, cacheTtlMs, menu }: ViewInput) {
   const { Box, Text } = ui

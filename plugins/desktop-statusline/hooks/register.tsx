@@ -226,7 +226,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="row" columnGap={2}>
             <Text dimColor>{'View:'}</Text>
             {VIEWS.map(v => (
-              <Button key={`view-${v.name}`} plain dimColor variant="secondary" onPress={() => chooseView($, v.name)}>
+              <Button key={`view-${v.name}`} plain onPress={() => chooseView($, v.name)}>
                 {`${v.name === current ? '●' : '○'} ${v.title}`}
               </Button>
             ))}

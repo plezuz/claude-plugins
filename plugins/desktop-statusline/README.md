@@ -19,24 +19,20 @@ inside Claude Code and draws it in the desktop app instead.
 
 ## This fork (plezuz)
 
-Fork of [centminmod/desktop-statusline](https://github.com/centminmod/claude-plugins/tree/master/plugins/desktop-statusline).
-By default the band is one compact line plus the usage-limit meters:
+Fork of [centminmod/desktop-statusline](https://github.com/centminmod/claude-plugins/tree/master/plugins/desktop-statusline),
+installed as `plezuz-statusline`. A ☰ button at the end of the band's top row
+opens a menu with two complete views; the choice is kept across sessions.
 
-```
-$0.40 · 2M tokens · cache 49m left · hit 94%
-```
+- **Original** (`hooks/original.tsx`): the upstream band as published, with
+  only the ☰ button added. Keep it in step with upstream.
+- **Gray** (`hooks/gray.tsx`, the default): a full copy to change freely. No
+  colors, no emoji, no bars (each meter is its percent alone), cache time left
+  (`cache 49m left`, then `cache cold`) instead of idle time, and the session's
+  tokens beside its cost. Tokens count everything processed, cache reads
+  included, so they grow much faster than cost.
 
-- **cache Nm left**: minutes until the prompt cache expires (`cache_ttl`
-  minus the idle time since the last turn), then `cache cold`. Shown as a
-  warning in the last tenth of the TTL, and `cache live` while a turn runs.
-- **tokens**: every token processed this session (fresh input, cache writes,
-  cache reads and output, subagents included). Cache reads dominate, so this
-  grows much faster than cost.
-- Every element has a `show_*` switch in `/plugin` or `/config`. Off by
-  default: folder, branch, session age, prompt count, context meter and last
-  turn. Git runs only when folder or branch is on.
-
-Install from the fork. It has its own name, so it can run beside the original; its band is drawn above whatever the original draws:
+`hooks/register.tsx` collects the data and draws the menu; the two views get
+plain data and share no drawing code.
 
 ```
 /plugin marketplace add plezuz/claude-plugins

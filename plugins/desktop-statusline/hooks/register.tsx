@@ -1,70 +1,25 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelUsage, Register } from 'claude-code'
 
-import type { Limit, Snapshot } from '../types'
+import type { Limit, Snapshot, View } from '../types'
+import { grayView } from './gray'
+import { originalView } from './original'
+import { label, until } from './shared'
 
 const snapshot = atom({ plugin: 'plezuz-statusline', key: 'snap' } as const, null)
 const warned = atom({ plugin: 'plezuz-statusline', key: 'warned' } as const, [])
 const lastTurn = atom({ plugin: 'plezuz-statusline', key: 'lastTurn' } as const, null)
 const compactions = atom({ plugin: 'plezuz-statusline', key: 'compactions' } as const, null)
 const spent = atom({ plugin: 'plezuz-statusline', key: 'spent' } as const, null)
+const view = atom({ plugin: 'plezuz-statusline', key: 'view' } as const, 'gray')
+const menuOpen = atom({ plugin: 'plezuz-statusline', key: 'menuOpen' } as const, false)
 
 const REFRESH_MS = 60_000
 const WARN_AT = [95, 80]
-const LABELS: Record<string, string> = { five_hour: '5-hour', seven_day: 'Weekly' }
-const LABEL_CELLS = 8
-const PERCENT_CELLS = 5
-const DETAIL_GAP = 2
-const METER_GAP = 3
-const AGENT_ROWS = 3
-// Desktop metrics in CSS px, measured from screenshots of the band: a Box `width` cell, one
-// column of `bodyColumns`, and an average glyph of the band's proportional font. Bars are SVG
-// in px, so the limits row is fitted in px, keeping 5% spare for the estimate.
-const CELL_PX = 15
-const COL_PX = 12.5
-const CHAR_PX = 13
-const SPARE = 0.95
-const MIN_BAR_PX = 60
-const MAX_BAR_PX = 180
-
-const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
-const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
-
-const tokens = (n: number) =>
-  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`
-
-// Drawn as an image, so it cannot follow the theme: a translucent track reads on light and dark.
-const bar = (percent: number, width: number) => {
-  const fill = percent >= 95 ? '#e5484d' : percent >= 80 ? '#e0a030' : '#2f7de1'
-  const filled = Math.round((Math.min(percent, 100) / 100) * width)
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="8" viewBox="0 0 ${width} 8">` +
-    `<rect width="${width}" height="8" rx="4" fill="#808080" fill-opacity="0.3"/>` +
-    `<rect width="${filled}" height="8" rx="4" fill="${fill}"/></svg>`
-  )
-}
-
-const until = (iso: string, now: number) => {
-  const minutes = Math.max(0, Math.round((Date.parse(iso) - now) / 60_000))
-  if (minutes < 60) return `${minutes}m`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-  return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`
-}
-
-const elapsed = (ms: number) => {
-  const s = Math.round(ms / 1000)
-  if (s < 60) return `${s}s`
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
-}
-
-const ago = (ms: number) => {
-  const minutes = Math.floor(ms / 60_000)
-  if (minutes < 1) return '<1m'
-  if (minutes < 60) return `${minutes}m`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-  return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`
-}
+const VIEWS: { name: View; title: string }[] = [
+  { name: 'original', title: 'Original' },
+  { name: 'gray', title: 'Gray' },
+]
 
 const cacheHit = (u: ModelUsage) => {
   const input = u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens
@@ -74,34 +29,6 @@ const cacheHit = (u: ModelUsage) => {
 // Every token a request processed: fresh input, cache writes, cache reads and output.
 const processed = (u: ModelUsage) =>
   u.input_tokens + u.output_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
-
-// The `show_*` options. Each defaults to the compact profile: cost, tokens, cache time left and
-// hit rate, limits and agents on; location, branch, session age, prompts, context and last turn off.
-const SHOW_DEFAULTS = {
-  show_location: false,
-  show_branch: false,
-  show_session_age: false,
-  show_prompt_count: false,
-  show_context: false,
-  show_limits: true,
-  show_cost: true,
-  show_tokens: true,
-  show_cache_hit: true,
-  show_cache_remaining: true,
-  show_last_turn: false,
-  show_compactions: true,
-  show_agents: true,
-}
-type Show = Record<keyof typeof SHOW_DEFAULTS, boolean>
-const readShow = (options: Readonly<Record<string, unknown>>): Show => {
-  const show = { ...SHOW_DEFAULTS }
-  for (const key of Object.keys(show) as (keyof Show)[]) {
-    const value = options[key]
-    if (typeof value === 'boolean') show[key] = value
-    else if (value === 'true' || value === 'false') show[key] = value === 'true'
-  }
-  return show
-}
 
 const isOnDesktop = async ($: EngineInterface) => (await $.session.surfaces()).includes('desktop')
 
@@ -131,7 +58,7 @@ const warn = async ($: EngineInterface, limits: Limit[], now: number) => {
   if (fresh.length > 0) await update($, warned, s => [...s, ...fresh].slice(-50))
 }
 
-const refresh = async ($: EngineInterface, needsGit: boolean) => {
+const refresh = async ($: EngineInterface) => {
   if (!(await isOnDesktop($))) return
 
   const [usage, cwd, now, agents, prompts] = await Promise.all([
@@ -141,13 +68,10 @@ const refresh = async ($: EngineInterface, needsGit: boolean) => {
     $.agent.list(),
     $.session.turns(),
   ])
-  // Git runs only when the location or branch is shown.
-  const [status, dirs] = needsGit
-    ? await Promise.all([
-        git($, cwd, ['status', '--porcelain=v2', '--branch']),
-        git($, cwd, ['rev-parse', '--git-dir', '--git-common-dir']),
-      ])
-    : [null, null]
+  const [status, dirs] = await Promise.all([
+    git($, cwd, ['status', '--porcelain=v2', '--branch']),
+    git($, cwd, ['rev-parse', '--git-dir', '--git-common-dir']),
+  ])
 
   const lines = status?.split('\n') ?? []
   const head = lines.find(l => l.startsWith('# branch.head '))?.slice(14)
@@ -183,31 +107,43 @@ const refresh = async ($: EngineInterface, needsGit: boolean) => {
   await warn($, limits, now)
 }
 
+// The view picked in the ☰ menu is kept across sessions.
+async function loadView($: EngineInterface) {
+  const saved = await $.store.get('view')
+  if (saved === 'original' || saved === 'gray') await update($, view, () => saved)
+}
+
+async function chooseView($: EngineInterface, name: View) {
+  await update($, view, () => name)
+  await update($, menuOpen, () => false)
+  await $.store.set('view', name)
+}
+
 export const register: Register = (on, options) => {
   // The main conversation's prompt-cache TTL (the `cache_ttl` option): 1 hour on a Claude
   // subscription within plan usage, 5 minutes with an API key, a cloud provider or usage credits.
   const cacheTtlMs = options.cache_ttl === '5m' ? 5 * 60_000 : 60 * 60_000
-  const show = readShow(options)
-  const needsGit = show.show_location || show.show_branch
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    await refresh($, needsGit)
-    $.clock.every(REFRESH_MS, () => void refresh($, needsGit))
+    await loadView($)
+    await refresh($)
+    $.clock.every(REFRESH_MS, () => void refresh($))
 
     return started
   })
 
   on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
     const attached = await next(e)
-    await refresh($, needsGit)
+    await loadView($)
+    await refresh($)
 
     return attached
   })
 
   on('session.measure', async ($, e, next) => {
     const measured = await next(e)
-    await refresh($, needsGit)
+    await refresh($)
 
     return measured
   })
@@ -229,14 +165,14 @@ export const register: Register = (on, options) => {
         cacheHit: e.usage ? cacheHit(e.usage) : null,
       }))
     }
-    await refresh($, needsGit)
+    await refresh($)
 
     return completed
   })
 
   // A spawned agent shows as running only once it has started; look again shortly after.
   on('tool.call', { tool: 'Agent' }, ($, e, next) => {
-    $.clock.after(2000, () => void refresh($, needsGit))
+    $.clock.after(2000, () => void refresh($))
 
     return next(e)
   })
@@ -262,146 +198,40 @@ export const register: Register = (on, options) => {
     const snap = await read($, snapshot)
     if (snap === null) return next(e)
 
-    const { Box, Svg, Text } = $.ui.resolve(e)
-
-    const meter = (name: string, percent: number | null, detail: string, barPx: number) => (
-      <Box flexDirection="row" alignItems="center">
-        <Box width={LABEL_CELLS} flexShrink={0}>
-          <Text>{name}</Text>
-        </Box>
-        {percent === null ? (
-          <Text dimColor>{'waiting for first response'}</Text>
-        ) : (
-          <Box flexDirection="row" alignItems="center" flexShrink={0}>
-            <Svg source={bar(percent, barPx)} alt={`${name} ${percent}% used`} width={barPx} height={8} />
-            <Box width={PERCENT_CELLS} justifyContent="flex-end">
-              <Text color={tone(percent)}>{`${percent}%`}</Text>
-            </Box>
-          </Box>
-        )}
-        <Box marginLeft={DETAIL_GAP} flexShrink={0}>
-          <Text dimColor>{detail}</Text>
-        </Box>
-      </Box>
+    const ui = $.ui.resolve(e)
+    const { Box, Button, Text } = ui
+    const current = await read($, view)
+    const isOpen = await read($, menuOpen)
+    const menu = (
+      <Button key="menu" plain dimColor onPress={() => update($, menuOpen, o => !o)}>
+        {'☰'}
+      </Button>
     )
-
-    // Fit the limit meters on one row: try "resets in 2h 8m", then "↻ 2h 8m", and stack them
-    // (the one case of 5 lines) only when even the short form leaves a bar under MIN_BAR_PX.
-    const availPx = e.props.bodyColumns * COL_PX * SPARE
-    const fixedPx = (LABEL_CELLS + PERCENT_CELLS + DETAIL_GAP) * CELL_PX
-    const n = Math.max(1, snap.limits.length)
-    const fit = (isLong: boolean) => {
-      const details = snap.limits.map(l => (l.resetsAt ? `${isLong ? 'resets in ' : '↻ '}${until(l.resetsAt, snap.at)}` : ''))
-      const textPx = details.reduce((sum, d) => sum + d.length * CHAR_PX, 0)
-      const barPx = Math.floor((availPx - n * fixedPx - (n - 1) * METER_GAP * CELL_PX - textPx) / n)
-      return { details, barPx: Math.min(MAX_BAR_PX, barPx) }
+    const input = {
+      ui,
+      e,
+      snap,
+      turn: await read($, lastTurn),
+      compactions: await read($, compactions),
+      spent: await read($, spent),
+      cacheTtlMs,
+      menu,
     }
-    const long = fit(true)
-    const { details, barPx: sharedBar } = long.barPx >= MIN_BAR_PX ? long : fit(false)
-    const isStacked = sharedBar < MIN_BAR_PX
-    const longestPx = Math.max(0, ...details.map(d => d.length * CHAR_PX))
-    const limitBar = isStacked
-      ? Math.max(40, Math.min(MAX_BAR_PX, Math.floor(availPx - fixedPx - longestPx)))
-      : sharedBar
-    const used = snap.contextTokens === null ? '' : `${tokens(snap.contextTokens)} / ${tokens(snap.contextWindow)}`
-    const contextRoomPx = Math.floor(availPx - fixedPx - used.length * CHAR_PX)
-    const contextBar = Math.max(40, Math.min(isStacked ? limitBar : 2 * limitBar, contextRoomPx))
-
-    const where = [
-      show.show_location ? `📁 ${snap.dir}` : '',
-      show.show_branch && snap.branch !== null
-        ? `🌿 ${snap.branch}${snap.isWorktree ? ' 🌳' : ''}` +
-          `${snap.ahead ? ` ↑${snap.ahead}` : ''}${snap.behind ? ` ↓${snap.behind}` : ''}`
-        : '',
-      show.show_location && snap.changed ? `● ${snap.changed} changed` : '',
-    ]
-      .filter(Boolean)
-      .join('   ')
-
-    // The summary line's parts, in order: dim unless they need attention (warning).
-    const parts: { text: string; emphasis?: 'warning' }[] = []
-    if (show.show_session_age) parts.push({ text: `session ${ago(snap.at - snap.startedAt)}` })
-    if (show.show_prompt_count) parts.push({ text: `${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}` })
-    if (show.show_cost && snap.costUsd !== null) parts.push({ text: `$${snap.costUsd.toFixed(2)}` })
-    const s = await read($, spent)
-    if (show.show_tokens && s !== null && s.since === snap.startedAt) parts.push({ text: `${tokens(s.tokens)} tokens` })
-
-    const turn = await read($, lastTurn)
-    if (turn !== null && turn.at >= snap.startedAt) {
-      // A running turn keeps the cache warm; otherwise it lives cache_ttl after the last turn.
-      const leftMs = cacheTtlMs - Math.max(0, snap.at - turn.at)
-      if (show.show_cache_remaining) {
-        if (e.props.isWorking) parts.push({ text: 'cache live' })
-        else if (leftMs <= 0) parts.push({ text: 'cache cold', emphasis: 'warning' })
-        else {
-          const minutes = Math.floor(leftMs / 60_000)
-          parts.push({
-            text: `cache ${minutes < 1 ? '<1m' : `${minutes}m`} left`,
-            emphasis: leftMs <= cacheTtlMs / 10 ? 'warning' : undefined,
-          })
-        }
-      }
-      if (show.show_cache_hit && turn.cacheHit !== null) {
-        parts.push({ text: `hit ${turn.cacheHit}%`, emphasis: turn.cacheHit < 50 ? 'warning' : undefined })
-      }
-      if (show.show_last_turn) {
-        parts.push({ text: `last turn ${elapsed(turn.durationMs)}${turn.model ? ` on ${turn.model}` : ''}` })
-      }
-    }
-    const c = await read($, compactions)
-    if (show.show_compactions && c !== null && c.since === snap.startedAt) {
-      const sizes = c.before === null || c.after === null ? '' : ` (last ${tokens(c.before)} → ${tokens(c.after)})`
-      parts.push({ text: `compacted ${c.count}×${sizes}` })
-    }
-    // Running agents get rows of their own (description truncated, type kept).
-    const agentRows = show.show_agents ? snap.agents.slice(0, AGENT_ROWS) : []
-    const moreAgents = show.show_agents ? snap.agents.length - agentRows.length : 0
-    const showLimits = show.show_limits && snap.limits.length > 0
-
-    if (!where && parts.length === 0 && !show.show_context && !showLimits && agentRows.length === 0) return next(e)
-
-    const summary = (
-      <Box flexDirection="row" flexShrink={0}>
-        {parts.map((p, i) => (
-          <Box flexDirection="row">
-            {i > 0 && <Text dimColor>{' · '}</Text>}
-            <Text color={p.emphasis} dimColor={p.emphasis === undefined}>
-              {p.text}
-            </Text>
-          </Box>
-        ))}
-      </Box>
-    )
-
-    // Whatever the plugins beneath draw (such as the original desktop-statusline) stays, under ours.
-    const below = await next(e)
+    const band = current === 'gray' ? grayView(input) : originalView(input)
 
     return (
       <Box flexDirection="column">
-        {where ? (
-          <Box flexDirection="row" justifyContent="space-between" width="100%">
-            <Text wrap="truncate-end">{where}</Text>
-            {parts.length > 0 && <Box marginLeft={2}>{summary}</Box>}
-          </Box>
-        ) : (
-          parts.length > 0 && summary
-        )}
-        {show.show_context && meter('Context', snap.contextPercent, used, contextBar)}
-        {showLimits && (
-          <Box flexDirection={isStacked ? 'column' : 'row'} columnGap={METER_GAP}>
-            {snap.limits.map((l, i) => meter(label(l.kind), l.percent, details[i] ?? '', limitBar))}
+        {isOpen && (
+          <Box flexDirection="row" columnGap={2}>
+            <Text dimColor>{'View:'}</Text>
+            {VIEWS.map(v => (
+              <Button key={`view-${v.name}`} plain onPress={() => chooseView($, v.name)}>
+                {`${v.name === current ? '●' : '○'} ${v.title}`}
+              </Button>
+            ))}
           </Box>
         )}
-        {agentRows.map(a => (
-          <Box flexDirection="row" justifyContent="space-between" width="100%">
-            <Text wrap="truncate-end">{`⏳ ${a.description || a.type}`}</Text>
-            <Box marginLeft={2} flexShrink={0}>
-              <Text dimColor>{a.type.split(':').pop()}</Text>
-            </Box>
-          </Box>
-        ))}
-        {moreAgents > 0 && <Text dimColor>{`   +${moreAgents} more agent${moreAgents > 1 ? 's' : ''} running`}</Text>}
-        {below}
+        {band}
       </Box>
     )
   })

@@ -192,6 +192,13 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  // A click on the ≡ (menu-button.tsx) opens or closes the view menu.
+  on('ui.message', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.data !== 'toggle') return next(e)
+    await update($, menuOpen, o => !o)
+    return {}
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
 
@@ -199,15 +206,10 @@ export const register: Register = (on, options) => {
     if (snap === null) return next(e)
 
     const ui = $.ui.resolve(e)
-    const { Box, Button, Text } = ui
+    const { Box, Button, Client, Text } = ui
     const current = await read($, view)
     const isOpen = await read($, menuOpen)
-    const menu = (
-      // Gray at rest; "≡" is a plain text glyph (☰ can come out as a black emoji on Windows).
-      <Button key="menu" plain dimColor variant="secondary" onPress={() => update($, menuOpen, o => !o)}>
-        {'≡'}
-      </Button>
-    )
+    const menu = <Client key="menu" module="./menu-button.tsx" />
     const input = {
       ui,
       e,

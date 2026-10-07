@@ -64,11 +64,12 @@ test('Gray is the default: two dotted lines, percent only, no bars', async ($, o
   expect(await ui.find({ type: 'Svg' })).toBeUndefined()
 })
 
-test('the ☰ menu switches to Original, which keeps its bars', async ($, on) => {
+test('the ≡ menu switches to Original, which keeps its bars', async ($, on) => {
   await start($, on)
   const ui = await band($)
   expect(await ui.find({ key: 'view-original' })).toBeUndefined()
-  await ui.press({ key: 'menu' })
+  await ui.pointer({ type: 'down', x: 0, y: 0, button: 'left', in: 'menu' })
+  await ui.pointer({ type: 'up', x: 0, y: 0, button: 'left', in: 'menu' })
   await ui.press({ key: 'view-original' })
   expect(await ui.find({ key: 'view-original' })).toBeUndefined()
   expect(await ui.find({ type: 'Svg' })).toBeDefined()

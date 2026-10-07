@@ -1,6 +1,6 @@
 {
   "name": "plezuz-statusline",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Status band above the prompt in the Claude Desktop app's Code tab, with a ☰ menu to switch between two complete views: Original (centminmod's desktop-statusline as published) and Gray (no colors or bars, percent only, cache time left, session tokens). The choice is kept across sessions. Toasts at 80% and 95% of a usage limit.",
   "author": {
     "name": "George Liu",

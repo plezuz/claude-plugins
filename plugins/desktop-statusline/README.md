@@ -36,11 +36,11 @@ $0.40 · 2M tokens · cache 49m left · hit 94%
   default: folder, branch, session age, prompt count, context meter and last
   turn. Git runs only when folder or branch is on.
 
-Install from the fork:
+Install from the fork. It has its own name, so it can run beside the original; its band is drawn above whatever the original draws:
 
 ```
 /plugin marketplace add plezuz/claude-plugins
-/plugin install desktop-statusline@plezuz
+/plugin install plezuz-statusline@plezuz
 ```
 
 ---

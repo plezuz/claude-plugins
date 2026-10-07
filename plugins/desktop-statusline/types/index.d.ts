@@ -33,7 +33,7 @@ export type Compactions = { since: number; count: number; before: number | null;
 
 declare module 'claude-code' {
   interface PluginState {
-    'desktop-statusline': {
+    'plezuz-statusline': {
       snap: Snapshot | null
       warned: string[]
       lastTurn: TurnStat | null

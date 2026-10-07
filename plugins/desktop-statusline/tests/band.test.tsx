@@ -17,7 +17,7 @@ const engine = (on: On, saved: Record<string, unknown>) => {
   }))
   on('session.surfaces', () => ({ value: ['desktop'] as const }))
   on('session.turns', () => ({ value: 3 }))
-  on('session.cwd', () => ({ value: '/work/proj' }))
+  on('session.cwd', () => ({ value: 'C:\\work\\proj' }))
   on('agent.list', () => ({ value: [] }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } }) as never)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -58,7 +58,7 @@ const band = ($: Engine) =>
 test('Gray is the default: two dotted lines, percent only, no bars', async ($, on) => {
   await start($, on)
   const ui = await band($)
-  expect(await ui.find({ text: 'proj · session 11m · 3 prompts · $0.40 · 1M tokens · hit 94%' })).toBeDefined()
+  expect(await ui.find({ text: /^proj · session 11m · 3 prompts · \$0\.40 · 1M tokens · hit 94%$/ })).toBeDefined()
   expect(await ui.find({ text: 'cache 49m left' })).toBeDefined()
   expect(await ui.find({ text: '5-hour 42% resets in 2h 49m · last turn 1s on opus-5-5' })).toBeDefined()
   expect(await ui.find({ type: 'Svg' })).toBeUndefined()

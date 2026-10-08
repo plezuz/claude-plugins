@@ -1,5 +1,7 @@
 export type Limit = { kind: string; percent: number; resetsAt: string | null }
 
+export type SavedLimits = { at: number; limits: Limit[] }
+
 export type Agent = { type: string; description: string }
 
 export type Snapshot = {
@@ -17,6 +19,8 @@ export type Snapshot = {
   contextWindow: number
   costUsd: number | null
   limits: Limit[]
+  // The last limits the app reported, in this or an earlier session.
+  savedLimits: SavedLimits | null
   agents: Agent[]
 }
 

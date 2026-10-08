@@ -15,9 +15,16 @@ export function grayView({ ui, snap, turn, request, compactions: c, spent: s, ca
 
   // Left: the most interesting first, so a narrow window cuts the least interesting end.
   const left: string[] = []
-  for (const l of snap.limits) {
+  // Without a fresh reading, the last limits seen whose window has not reset yet, with their age.
+  const saved = snap.savedLimits
+  const isOld = snap.limits.length === 0 && saved !== null
+  const limits = isOld
+    ? saved.limits.filter(l => l.resetsAt === null || Date.parse(l.resetsAt) > snap.at)
+    : snap.limits
+  for (const l of limits) {
     left.push(`${SHORT[l.kind] ?? label(l.kind)} ${l.percent}%${l.resetsAt ? ` ${until(l.resetsAt, snap.at)}` : ''}`)
   }
+  if (isOld && limits.length > 0) left.push(`limits ${ago(snap.at - saved.at)} ago`)
   if (snap.changed) left.push(`${snap.changed} changed`)
   left.push(`${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}`)
   if (snap.costUsd !== null) left.push(`$${snap.costUsd.toFixed(2)}`)

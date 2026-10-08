@@ -12,14 +12,16 @@ const USAGE = {
   cache_creation_input_tokens: 0,
 }
 
-const engine = (on: On, saved: Record<string, unknown>) => {
+const FIVE_HOUR = [{ kind: 'five_hour', percentUsed: 42, resetsAt: new Date(T0 + 3 * 3_600_000).toISOString() }]
+
+const engine = (on: On, saved: Record<string, unknown>, rateLimits: unknown[] = FIVE_HOUR) => {
   const clock = mock.clock(on)
   mock.store(on, saved)
   on('session.usage', () => ({
     value: {
       startedAt: T0,
       context: { percent: 10, tokens: 20_000, window: 200_000 },
-      rateLimits: [{ kind: 'five_hour', percentUsed: 42, resetsAt: new Date(T0 + 3 * 3_600_000).toISOString() }],
+      rateLimits,
       cost: { usd: 0.4 },
     },
   }))
@@ -136,4 +138,28 @@ test('while the first turn still runs Gray shows the cache time left', async ($,
   const ui = await band($, true)
   expect(await ui.find({ text: 'cache 50m left' })).toBeDefined()
   expect(await ui.find({ text: /hit 99%/ })).toBeDefined()
+})
+
+test('without a reading Gray shows the last limits seen, with their age', async ($, on) => {
+  const old = {
+    at: T0 - 20 * 60_000,
+    limits: [
+      { kind: 'five_hour', percent: 27, resetsAt: new Date(T0 + 2 * 3_600_000).toISOString() },
+      { kind: 'seven_day', percent: 95, resetsAt: new Date(T0 + 28 * 3_600_000).toISOString() },
+      { kind: 'spend_limit', percent: 10, resetsAt: new Date(T0 - 60_000).toISOString() },
+    ],
+  }
+  const clock = engine(on, { limits: old }, [])
+  await clock.set(T0)
+  await $.session.start({ cwd: '/work/proj', surface: 'desktop', isInteractive: true })
+  const ui = await band($)
+  expect(await ui.find({ text: /^5h 27% 2h 0m · w 95% 1d 4h · limits 20m ago · 3 prompts/ })).toBeDefined()
+  expect(await ui.find({ text: /spend/ })).toBeUndefined()
+})
+
+test('a fresh reading wins over an older saved one and has no age', async ($, on) => {
+  await start($, on, { limits: { at: T0 - 60_000, limits: [{ kind: 'seven_day', percent: 95, resetsAt: null }] } })
+  const ui = await band($)
+  expect(await ui.find({ text: /^5h 42% 2h 49m · 3 prompts/ })).toBeDefined()
+  expect(await ui.find({ text: /ago|w 95%/ })).toBeUndefined()
 })

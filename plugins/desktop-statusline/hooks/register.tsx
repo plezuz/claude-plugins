@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelUsage, Register } from 'claude-code'
 
-import type { RequestStat, Snapshot, TurnStat, View } from '../types'
+import type { RequestStat, SavedLimits, Snapshot, TurnStat, View } from '../types'
 import { grayView } from './gray'
 import { originalView } from './original'
 
@@ -14,6 +14,7 @@ const view = atom({ plugin: 'plezuz-statusline', key: 'view' } as const, 'gray')
 const menuOpen = atom({ plugin: 'plezuz-statusline', key: 'menuOpen' } as const, false)
 
 const REFRESH_MS = 60_000
+const LIMITS_KEY = 'limits'
 const VIEWS: { name: View; title: string }[] = [
   { name: 'original', title: 'Original' },
   { name: 'gray', title: 'Gray' },
@@ -63,6 +64,13 @@ const refresh = async ($: EngineInterface) => {
     percent: r.percentUsed,
     resetsAt: r.resetsAt ?? null,
   }))
+  // The app reports no limits before its first reading or when a window drops out; Gray then
+  // shows the last limits seen, in any session, with their age.
+  let saved = (await $.store.get(LIMITS_KEY)) as SavedLimits | undefined
+  if (limits.length > 0) {
+    saved = { at: now, limits }
+    await $.store.set(LIMITS_KEY, saved)
+  }
 
   const snap: Snapshot = {
     at: now,
@@ -79,6 +87,7 @@ const refresh = async ($: EngineInterface) => {
     contextWindow: usage.context.window,
     costUsd: usage.cost?.usd ?? null,
     limits,
+    savedLimits: saved ?? null,
     agents: agents
       .filter(a => a.status === 'running')
       .map(a => ({ type: a.type, description: a.description })),

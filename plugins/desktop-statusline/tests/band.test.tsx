@@ -14,9 +14,19 @@ const USAGE = {
 
 const FIVE_HOUR = [{ kind: 'five_hour', percentUsed: 42, resetsAt: new Date(T0 + 3 * 3_600_000).toISOString() }]
 
-const engine = (on: On, saved: Record<string, unknown>, rateLimits: unknown[] = FIVE_HOUR) => {
+const engine = (on: On, saved: Record<string, unknown> | 'broken', rateLimits: unknown[] = FIVE_HOUR) => {
   const clock = mock.clock(on)
-  mock.store(on, saved)
+  if (saved === 'broken') {
+    const broken = () => {
+      throw new Error('store file is not JSON')
+    }
+    on('store.get', broken)
+    on('store.set', broken)
+    on('store.delete', broken)
+    on('store.keys', broken)
+  } else {
+    mock.store(on, saved)
+  }
   on('session.usage', () => ({
     value: {
       startedAt: T0,
@@ -40,7 +50,7 @@ const engine = (on: On, saved: Record<string, unknown>, rateLimits: unknown[] = 
   return clock
 }
 
-const start = async ($: Engine, on: On, saved: Record<string, unknown> = {}) => {
+const start = async ($: Engine, on: On, saved: Record<string, unknown> | 'broken' = {}) => {
   const clock = engine(on, saved)
   await clock.set(T0)
   await $.session.start({ cwd: '/work/proj', surface: 'desktop', isInteractive: true })
@@ -96,6 +106,12 @@ test('the ≡ menu switches to Original, which keeps its bars', async ($, on) =>
   expect(await ui.find({ key: 'view-original' })).toBeUndefined()
   expect(await ui.find({ type: 'Svg' })).toBeDefined()
   expect(await ui.find({ text: /idle 11m/ })).toBeDefined()
+})
+
+test('a broken store file does not hide the band', async ($, on) => {
+  await start($, on, 'broken')
+  const ui = await band($)
+  expect(await ui.find({ text: 'cache 49m left' })).toBeDefined()
 })
 
 test('a saved choice is used at the next session start', async ($, on) => {

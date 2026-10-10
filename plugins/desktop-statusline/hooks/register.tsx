@@ -40,6 +40,37 @@ const git = async ($: EngineInterface, cwd: string, args: string[]) => {
   }
 }
 
+// The store is a file on disk; one left broken (say, emptied by a crash) makes every call
+// throw, writes included. Its values are conveniences, so the band goes on without them
+// until the file is moved aside.
+const storeGet = async ($: EngineInterface, key: string) => {
+  try {
+    return await $.store.get(key)
+  } catch {
+    return undefined
+  }
+}
+
+const storeSet = async ($: EngineInterface, key: string, value: unknown) => {
+  try {
+    await $.store.set(key, value)
+  } catch {}
+}
+
+const storeDelete = async ($: EngineInterface, key: string) => {
+  try {
+    await $.store.delete(key)
+  } catch {}
+}
+
+const storeKeys = async ($: EngineInterface) => {
+  try {
+    return await $.store.keys()
+  } catch {
+    return []
+  }
+}
+
 const refresh = async ($: EngineInterface) => {
   if (!(await isOnDesktop($))) return
 
@@ -66,10 +97,10 @@ const refresh = async ($: EngineInterface) => {
   }))
   // The app reports no limits before its first reading or when a window drops out; Gray then
   // shows the last limits seen, in any session, with their age.
-  let saved = (await $.store.get(LIMITS_KEY)) as SavedLimits | undefined
+  let saved = (await storeGet($, LIMITS_KEY)) as SavedLimits | undefined
   if (limits.length > 0) {
     saved = { at: now, limits }
-    await $.store.set(LIMITS_KEY, saved)
+    await storeSet($, LIMITS_KEY, saved)
   }
 
   const snap: Snapshot = {
@@ -98,7 +129,7 @@ const refresh = async ($: EngineInterface) => {
 
 // The view picked in the ☰ menu is kept across sessions.
 async function loadView($: EngineInterface) {
-  const saved = await $.store.get('view')
+  const saved = await storeGet($, 'view')
   if (saved === 'original' || saved === 'gray') await update($, view, () => saved)
 }
 
@@ -111,28 +142,28 @@ const KEEP_SAVED_MS = 2 * 24 * 3_600_000
 async function loadSaved($: EngineInterface) {
   const id = await $.session.id()
   if ((await read($, lastTurn)) === null) {
-    const saved = await $.store.get(TURN_KEY + id)
+    const saved = await storeGet($, TURN_KEY + id)
     if (saved) await update($, lastTurn, () => saved as TurnStat)
   }
   if ((await read($, lastRequest)) === null) {
-    const saved = await $.store.get(REQUEST_KEY + id)
+    const saved = await storeGet($, REQUEST_KEY + id)
     if (saved) await update($, lastRequest, () => saved as RequestStat)
   }
 }
 
 async function save($: EngineInterface, prefix: string, stat: { at: number }) {
-  await $.store.set(prefix + (await $.session.id()), stat)
-  for (const key of await $.store.keys()) {
+  await storeSet($, prefix + (await $.session.id()), stat)
+  for (const key of await storeKeys($)) {
     if (!key.startsWith(prefix)) continue
-    const old = (await $.store.get(key)) as { at: number } | undefined
-    if (!old || stat.at - old.at > KEEP_SAVED_MS) await $.store.delete(key)
+    const old = (await storeGet($, key)) as { at: number } | undefined
+    if (!old || stat.at - old.at > KEEP_SAVED_MS) await storeDelete($, key)
   }
 }
 
 async function chooseView($: EngineInterface, name: View) {
   await update($, view, () => name)
   await update($, menuOpen, () => false)
-  await $.store.set('view', name)
+  await storeSet($, 'view', name)
 }
 
 export const register: Register = (on, options) => {

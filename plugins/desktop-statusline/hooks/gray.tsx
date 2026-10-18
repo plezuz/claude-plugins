@@ -3,8 +3,7 @@ import type { ViewInput } from './shared'
 
 // The Gray view: our own band, changed freely. One line of plain gray text, no bars; the one
 // color is a red "cache expired". Within one item the parts are joined by a space ("w 95% 1d 4h"); separate items are
-// joined by " · ". No folder (the app shows it), no agent rows, no last turn, no context (the
-// app's own circle shows it).
+// joined by " · ". No folder (the app shows it), no agent rows, no last turn.
 
 const SEP = ' · '
 // Short names for the plan limits ("5h 27% 2h 17m · w 95% 1d 4h").
@@ -15,6 +14,8 @@ export function grayView({ ui, snap, turn, request, compactions: c, spent: s, ca
 
   // Left: the most interesting first, so a narrow window cuts the least interesting end.
   const left: string[] = []
+  // Context fill first: the app's own circle is the weekly limit, not context.
+  if (snap.contextPercent !== null) left.push(`context ${Math.round(snap.contextPercent)}%`)
   // Without a fresh reading, the last limits seen whose window has not reset yet, with their age.
   const saved = snap.savedLimits
   const isOld = snap.limits.length === 0 && saved !== null

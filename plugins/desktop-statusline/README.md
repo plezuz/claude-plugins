@@ -26,7 +26,7 @@ opens a menu with two complete views; the choice is kept across sessions.
 - **Original** (`hooks/original.tsx`): the upstream band as published, with
   only the ☰ button added. Keep it in step with upstream.
 - **Gray** (`hooks/gray.tsx`, the default): a full copy to change freely. No
-  colors, no emoji, no bars (each meter is its percent alone), cache time left
+  colors, no emoji, no bars (each meter is its percent alone, context first), cache time left
   (`cache 49m left`, then `cache cold`) instead of idle time, and the session's
   tokens beside its cost. Tokens count everything processed, cache reads
   included, so they grow much faster than cost.
